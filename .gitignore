@@ -1,0 +1,6 @@
+node_modules/
+token.json
+discord-token.json
+*.pem
+screeps-batallia2-be663033cd05.json
+.vscode
