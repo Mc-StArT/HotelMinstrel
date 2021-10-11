@@ -5,7 +5,8 @@ const {
     createAudioResource, 
     joinVoiceChannel, 
     AudioPlayer, 
-    VoiceConnection 
+    VoiceConnection, 
+    getVoiceConnection
 } = require('@discordjs/voice');
 const {
     prefix,
@@ -13,8 +14,8 @@ const {
 } = require('./config.json');
 const ytdl = require('ytdl-core');
 
-
-
+var queue = []
+var first = true
 
 const allIntents = new Discord.Intents(32767)
 const client = new Discord.Client({ intents: allIntents });
@@ -27,7 +28,7 @@ const audioPlayer = createAudioPlayer({
 		noSubscriber: NoSubscriberBehavior.Pause,
 	},
 });
-const resource = createAudioResource();
+// const resource = createAudioResource();
 
 
 
@@ -43,6 +44,9 @@ client.on("messageCreate", async message => {
     } else if (message.content.startsWith(`${prefix}skip`)) {
         skip(message, queue);
         return;
+    } else if (message.content.startsWith(`${prefix}connect`)) {
+        await connect(message);
+        return;
     } else if (message.content.startsWith(`${prefix}stop`)) {
         stop(message, queue);
         return;
@@ -55,12 +59,48 @@ client.on("messageCreate", async message => {
  * @param {Discord.Message} msg 
  * @param {Array} queue 
  */
-function execute(msg, queue) {
-    songName = msg.content.split(" ")
-    queue.push(songName)
+async function execute(msg, queue) {
+    
+    // console.log(msg.content.split(" ")[1])
+    const songInfo = await ytdl.getInfo(msg.content.split(" ")[1]);
+    // console.log(songInfo)
+    const song = {
+        title: songInfo.videoDetails.title,
+        url: songInfo.videoDetails.video_url,
+    };
+    await queue.push(song)
+    if (audioPlayer.state.status == "idle") {
+        // console.log(queue[0])
+        var next = queue.shift()
+        var stream = await ytdl(next.url, { filter:'audioonly' })
+        // console.log(next.url)
+        var nextRes = await createAudioResource(stream,  { seek: 0, volume: 1 })
+        
+        audioPlayer.play(nextRes)
+    }
     console.log(audioPlayer.state) 
 }
 
+// audioPlayer.on("stateChange", (oldState, newState) => {
+//     if (audioPlayer.state.status  == "idle")  {
+//         audioPlayer.play(createAudioResource(queue.shift()[1]))
+//     }
+// })
+
+async function connect(msg) {
+    const voiceChannel = msg.member.voice.channel
+    if (!voiceChannel) return msg.channel.send('You need to be in a voice channel to play music!');
+    const permissions = voiceChannel.permissionsFor(msg.client.user);
+    if (!permissions.has('CONNECT') || !permissions.has('SPEAK')) {
+        return msg.channel.send('I need the permissions to join and   speak in your voice channel!');
+    }
+    const connection = await joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: voiceChannel.guild.id,
+        adapterCreator: voiceChannel.guild.voiceAdapterCreator
+    })
+    connection.subscribe(audioPlayer)
+}
 
 
 

@@ -1,6 +1,8 @@
 node_modules/
 token.json
-discord-token.json
+config.json
 *.pem
-screeps-batallia2-be663033cd05.json
 .vscode
+*.json
+package-lock.json
+package.json

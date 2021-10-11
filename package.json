@@ -4,7 +4,9 @@
     "discord.js": "^13.2.0",
     "ffmpeg": "^0.0.4",
     "ffmpeg-static": "^4.4.0",
+    "npm": "^6.14.15",
     "opusscript": "^0.0.8",
+    "tweetnacl": "^1.0.3",
     "ytdl-core": "^4.9.1"
   }
 }
