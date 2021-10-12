@@ -1,8 +1,8 @@
 node_modules/
-token.json
-config.json
+# token.json
+# config.json
 *.pem
 .vscode
-*.json
-package-lock.json
-package.json
+# *.json
+discord_token.json
+config.json

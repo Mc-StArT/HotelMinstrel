@@ -1,21 +1,23 @@
 const Discord = require('discord.js');
 const {
-    createAudioPlayer, 
-    NoSubscriberBehavior, 
-    createAudioResource, 
-    joinVoiceChannel, 
-    AudioPlayer, 
-    VoiceConnection, 
+    createAudioPlayer,
+    NoSubscriberBehavior,
+    createAudioResource,
+    joinVoiceChannel,
+    AudioPlayer,
+    VoiceConnection,
     getVoiceConnection
 } = require('@discordjs/voice');
-const {
-    prefix,
-    discord_token,
-} = require('./config.json');
+const { prefix } = require('./config.json');
+const { discord_token } = require("./discord_token.json")
 const ytdl = require('ytdl-core');
+const {LoopState, CreateSongEmbed} = require("./modernComms")
 
 var queue = []
-var first = true
+var current = null
+/**@type {Discord.TextBasedChannels} */
+var textChannel = null
+var loopState = LoopState.OFF
 
 const allIntents = new Discord.Intents(32767)
 const client = new Discord.Client({ intents: allIntents });
@@ -24,13 +26,19 @@ client.login(discord_token);
 
 
 const audioPlayer = createAudioPlayer({
-	behaviors: {
-		noSubscriber: NoSubscriberBehavior.Pause,
-	},
+    behaviors: {
+        noSubscriber: NoSubscriberBehavior.Pause,
+    }
 });
-// const resource = createAudioResource();
 
+audioPlayer.on("error", error => {
+    console.error(`Error: ${error.message} with resource ${error.resource.metadata.title}`);
+    if (textChannel) {
+        textChannel.send(`Error: ${error.message} with resource ${error.resource.metadata.title}`)
+    }
+	playNext();
 
+})
 
 client.on("messageCreate", async message => {
     if (message.author.bot) return;
@@ -40,12 +48,16 @@ client.on("messageCreate", async message => {
 
     if (message.content.startsWith(`${prefix}play`)) {
         execute(message, queue);
+        message.delete();
         return;
     } else if (message.content.startsWith(`${prefix}skip`)) {
         skip(message, queue);
+        message.delete();
         return;
     } else if (message.content.startsWith(`${prefix}connect`)) {
+        console.log("/connect got")
         await connect(message);
+        message.delete();
         return;
     } else if (message.content.startsWith(`${prefix}stop`)) {
         stop(message, queue);
@@ -53,6 +65,7 @@ client.on("messageCreate", async message => {
     } else {
         message.channel.send('You need to enter a valid command!')
     }
+    message.delete();
 })
 /**
  * 
@@ -60,34 +73,35 @@ client.on("messageCreate", async message => {
  * @param {Array} queue 
  */
 async function execute(msg, queue) {
-    
+
     // console.log(msg.content.split(" ")[1])
     const songInfo = await ytdl.getInfo(msg.content.split(" ")[1]);
     // console.log(songInfo)
     const song = {
         title: songInfo.videoDetails.title,
         url: songInfo.videoDetails.video_url,
+        info: songInfo,
     };
     await queue.push(song)
     if (audioPlayer.state.status == "idle") {
         // console.log(queue[0])
-        var next = queue.shift()
-        var stream = await ytdl(next.url, { filter:'audioonly' })
-        // console.log(next.url)
-        var nextRes = await createAudioResource(stream,  { seek: 0, volume: 1 })
-        
-        audioPlayer.play(nextRes)
+       playNext()
     }
-    console.log(audioPlayer.state) 
+    // console.log(audioPlayer.state) 
 }
 
-// audioPlayer.on("stateChange", (oldState, newState) => {
-//     if (audioPlayer.state.status  == "idle")  {
-//         audioPlayer.play(createAudioResource(queue.shift()[1]))
-//     }
-// })
-
+audioPlayer.on("stateChange", (oldState, newState) => {
+    if (audioPlayer.state.status == "idle") {
+        playNext()
+    }
+})
+/**
+ * 
+ * @param {Discord.Message} msg 
+ * @returns 
+ */
 async function connect(msg) {
+    textChannel = msg.channel
     const voiceChannel = msg.member.voice.channel
     if (!voiceChannel) return msg.channel.send('You need to be in a voice channel to play music!');
     const permissions = voiceChannel.permissionsFor(msg.client.user);
@@ -101,9 +115,45 @@ async function connect(msg) {
     })
     connection.subscribe(audioPlayer)
 }
+async function skip(msg) {
+    playNext()
+}
 
-
-
+async function playNext() {
+    if (queue[0]) {
+        switch (loopState) {
+            case LoopState.OFF:
+                {
+                    break;
+                }
+            case LoopState.QUEUE:
+                {
+                    queue.push(current)
+                    break;
+                }
+            case LoopState.TRACK:
+                {
+                    queue.unshift(current)
+                    break;
+                }
+        }
+        current = queue.shift()
+        var stream = await ytdl(current.url, { filter: 'audioonly' })
+        // console.log(next.url)
+        var Res = await createAudioResource(stream, { seek: 0, volume: 1, metadata: {
+            title: current.title,
+        },})
+    
+        audioPlayer.play(Res)
+        let embed = CreateSongEmbed(current)
+        console.log(embed)
+        textChannel.send({embeds: [embed]})
+        
+    } else {
+        textChannel.send("No more songs to sing")
+        audioPlayer.stop()
+    }
+}
 
 
 
