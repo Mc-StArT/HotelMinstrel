@@ -6,3 +6,4 @@ node_modules/
 # *.json
 discord_token.json
 config.json
+.prettierrc
